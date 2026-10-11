@@ -17,8 +17,9 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APP_VERSION_CODE: ${{ github.run_number }}
-      APP_VERSION_NAME: 1.0.${{ github.run_number }}
+      # +100: versions built in the site repository went up to 1.0.9 (code 9); Android only installs higher codes.
+      APP_VERSION_CODE: ${{ github.run_number + 100 }}
+      APP_VERSION_NAME: 1.1.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
