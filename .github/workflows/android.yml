@@ -92,10 +92,11 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          if [ "${{ steps.key.outputs.signed }}" = "true" ]; then task=assembleRelease; out=release/app-release.apk
+          # Release: the APK for the site and the AAB (Android App Bundle) that Google Play requires.
+          if [ "${{ steps.key.outputs.signed }}" = "true" ]; then task="assembleRelease bundleRelease"; out=release/app-release.apk
           else task=assembleDebug; out=debug/app-debug.apk; fi
           # On failure, surface Gradle's error lines as annotations (visible on the run page).
-          if ! ./gradlew --no-daemon "$task" > "$RUNNER_TEMP/gradle.log" 2>&1; then
+          if ! ./gradlew --no-daemon $task > "$RUNNER_TEMP/gradle.log" 2>&1; then
             cat "$RUNNER_TEMP/gradle.log"
             # Only Gradle's "What went wrong" section (and compiler errors), not the task list.
             { sed -n '/What went wrong/,/\* Try:/p' "$RUNNER_TEMP/gradle.log"; grep -E "^e: |error:|AAPT: error" "$RUNNER_TEMP/gradle.log"; } \
@@ -104,18 +105,26 @@ jobs:
           fi
           tail -5 "$RUNNER_TEMP/gradle.log"
           cp "app/build/outputs/apk/$out" "$GITHUB_WORKSPACE/master-ryadom.apk"
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
+            cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/master-ryadom.aab"
+          fi
           ls -la "$GITHUB_WORKSPACE/master-ryadom.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: master-ryadom-apk
-          path: master-ryadom.apk
+          name: master-ryadom-${{ env.APP_VERSION_NAME }}
+          path: |
+            master-ryadom.apk
+            master-ryadom.aab
+          if-no-files-found: warn
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "android-v${APP_VERSION_NAME}" master-ryadom.apk \
+          files="master-ryadom.apk"
+          [ -f master-ryadom.aab ] && files="$files master-ryadom.aab"
+          gh release create "android-v${APP_VERSION_NAME}" $files \
             --title "Мастер рядом для Android ${APP_VERSION_NAME}" \
-            --notes "Установка: скачайте master-ryadom.apk на телефон и откройте файл. Подпись: ${{ steps.key.outputs.signed == 'true' && 'release' || 'debug (тестовая)' }}." \
+            --notes "Установка: скачайте master-ryadom.apk на телефон и откройте файл. Для Google Play — master-ryadom.aab (Play Console → Выпуск → Создать выпуск). Подпись: ${{ steps.key.outputs.signed == 'true' && 'release' || 'debug (тестовая)' }}." \
             --latest
